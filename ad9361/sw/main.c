@@ -56,6 +56,9 @@
 #include "dac_core.h"
 #endif
 
+#include "tinyiiod.h"
+#include "tinyiiod_user.h"
+
 /******************************************************************************/
 /************************ Variables Definitions *******************************/
 /******************************************************************************/
@@ -106,9 +109,9 @@ AD9361_InitParam default_init_param = {
 	0,		//ensm_enable_pin_pulse_mode_enable *** adi,ensm-enable-pin-pulse-mode-enable
 	0,		//ensm_enable_txnrx_control_enable *** adi,ensm-enable-txnrx-control-enable
 	/* LO Control */
+	1,				//tx_lo_powerdown_managed_enable *** adi,tx-lo-powerdown-managed-enable
 	2400000000UL,	//rx_synthesizer_frequency_hz *** adi,rx-synthesizer-frequency-hz
 	2400000000UL,	//tx_synthesizer_frequency_hz *** adi,tx-synthesizer-frequency-hz
-	1,				//tx_lo_powerdown_managed_enable *** adi,tx-lo-powerdown-managed-enable
 	/* Rate & BW Control */
 	{983040000, 245760000, 122880000, 61440000, 30720000, 30720000},// rx_path_clock_frequencies[6] *** adi,rx-path-clock-frequencies
 	{983040000, 122880000, 122880000, 61440000, 30720000, 30720000},// tx_path_clock_frequencies[6] *** adi,tx-path-clock-frequencies
@@ -368,11 +371,19 @@ struct ad9361_rf_phy *ad9361_phy;
 struct ad9361_rf_phy *ad9361_phy_b;
 #endif
 
+#if (USE_LIBIIO == YES)
+extern struct tinyiiod_ops ops;
+#endif
+
 /***************************************************************************//**
  * @brief main
 *******************************************************************************/
 int main(void)
 {
+#if (USE_LIBIIO == YES)
+  struct tinyiiod *iiod;
+#endif
+
 #ifdef XILINX_PLATFORM
 	Xil_ICacheEnable();
 	Xil_DCacheEnable();
@@ -489,6 +500,15 @@ int main(void)
 #endif
 #endif
 #endif
+#endif
+
+#if (USE_LIBIIO == YES)
+        /* Create the tinyiiod */
+   iiod = tinyiiod_create(xml, &ops);
+
+    while(1) {
+       tinyiiod_read_command(iiod);
+    }
 #endif
 
 #ifdef CONSOLE_COMMANDS
