@@ -128,6 +128,12 @@ static int parse_open_string(struct tinyiiod *iiod, char *str)
 	return 0;
 }
 
+static int parse_writebuf_string(struct tinyiiod *iiod, char *str)
+{
+
+	return 0;
+}
+
 static int parse_readbuf_string(struct tinyiiod *iiod, char *str)
 {
 	char *device, *ptr;
@@ -168,7 +174,7 @@ int tinyiiod_parse_string(struct tinyiiod *iiod, char *str)
 		return 0;
 	}
 
-	if (!strncmp(str, "PRINT", sizeof("PRINT"))) {
+	if (!strncmp(str, "PRINT", sizeof("PRINT") - 1)) {
 		tinyiiod_write_xml(iiod);
 		return 0;
 	}
@@ -189,6 +195,9 @@ int tinyiiod_parse_string(struct tinyiiod *iiod, char *str)
 
 	if (!strncmp(str, "READBUF ", sizeof("READBUF ") -1))
 		return parse_readbuf_string(iiod, str + sizeof("READBUF ") - 1);
+	if (!strncmp(str, "WRITEBUF ", sizeof("WRITEBUF ") -1))
+		return parse_writebuf_string(iiod, str + sizeof("WRITEBUF ") - 1);
+
 
 	return -EINVAL;
 }

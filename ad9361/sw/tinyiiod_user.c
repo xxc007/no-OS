@@ -27,13 +27,22 @@
 #include "adc_core.h"
 #include "parameters.h"
 #include "xil_io.h"
+#include "ad9361_api.h"
 
 
 static unsigned int addr_to_read;
 static uint32_t channel_mask;
 extern struct ad9361_rf_phy *ad9361_phy;
 extern struct adc_state adc_st;
-
+int einval(void){
+	volatile int x=3;
+	x++;
+	return 22;}
+int enoent(void){
+	volatile int x=3;
+	x++;
+	return 2;
+}
 /***********************************************************************************************************************
 * Function Name: read_data
 * Description  : None
@@ -42,7 +51,13 @@ extern struct adc_state adc_st;
 ***********************************************************************************************************************/
 static void read_data(char *buf, size_t len)
 {
-	read(0, buf, len);
+	uint8_t i, ret;
+	ret = read(0, buf, len);
+
+	if (ret < len)
+		read(0, buf, len);
+//	for(i = 0; i < len; i++)
+//		*(buf + i) = inbyte();
 }
 
 /***********************************************************************************************************************
@@ -93,9 +108,13 @@ static ssize_t i_to_string(char *buf, size_t len, int value)
 ***********************************************************************************************************************/
 static bool dev_is_ad9361_module(const char *device)
 {
-	return strequal(device, "temp_module") || strequal(device, "iio:device0");
+	return strequal(device, "temp_module")
+			|| strequal(device, "iio:device0")
+			|| strequal(device, "iio:device1")
+			|| strequal(device, "iio:device2")
+			|| strequal(device, "iio:device3")
+			|| strequal(device, "iio:device4");
 }
-
 
 /***********************************************************************************************************************
 * Function Name: read_value
@@ -107,6 +126,24 @@ static long read_value(const char *str)
 {
 	char *end;
 	int32_t value = strtol(str, &end, 0);
+
+	if (end == str)
+		return -EINVAL;
+	else
+		return value;
+}
+
+
+/***********************************************************************************************************************
+* Function Name: read_value
+* Description  : None
+* Arguments    : None
+* Return Value : None
+***********************************************************************************************************************/
+static unsigned long read_ul_value(const char *str)
+{
+	char *end;
+	uint32_t value = strtoul(str, &end, 0);
 
 	if (end == str)
 		return -EINVAL;
@@ -185,7 +222,20 @@ static ssize_t ch_read_attr(const char *device, const char *channel,
 	if (strequal(attr, "voltage0")) {
 		return (ssize_t) snprintf(buf, len, "%d", 2);
 	}
-
+	if (strequal(attr, "calibscale")) {
+			return (ssize_t) snprintf(buf, len, "%d", "66");
+	}
+	if (strequal(attr, "calibphase")) {
+			return (ssize_t) snprintf(buf, len, "%d", 2);
+	}
+	if (strequal(attr, "sampling_frequency_available")) {
+			return (ssize_t) snprintf(buf, len, "%d", 2);
+	}
+	if (strequal(attr, "sp")) {
+		uint32_t sampling_freq_hz;
+		ad9361_get_rx_sampling_freq (ad9361_phy, &sampling_freq_hz);
+			return (ssize_t) snprintf(buf, len, "%d", sampling_freq_hz);
+	}
 	return -ENOENT;
 }
 
@@ -201,7 +251,20 @@ static ssize_t ch_write_attr(const char *device, const char *channel,
 
 	if (!dev_is_ad9361_module(device))
 			return -ENODEV;
-	
+	/* Get rid of a leading /n */
+	//buf++;
+
+	/* We have no output channels */
+	if (ch_out)
+		return -ENOENT;
+
+	if (strequal(attr, "sp")) {
+		uint32_t sampling_freq_hz = read_ul_value(buf);
+		ad9361_set_rx_sampling_freq (ad9361_phy, sampling_freq_hz);
+			return len;
+	}
+
+
 	return -ENOENT;
 }
 
