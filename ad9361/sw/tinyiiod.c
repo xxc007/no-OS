@@ -100,30 +100,6 @@ ssize_t tinyiiod_read_line(struct tinyiiod *iiod, char *buf, size_t len)
 	return (ssize_t) i;
 }
 
-ssize_t tinyiiod_read_line_new(struct tinyiiod *iiod, char *buf, size_t len)
-{
-//	unsigned int i;
-//	bool found = false;
-
-//	for (i = 0; i < len - 1; i++) {
-//		buf[i] = tinyiiod_read_char(iiod);
-//
-//		if (buf[i] != '\n' && buf[i] != '\r')
-//			found = true;
-//		else if (found)
-//			break;
-//	}
-	iiod->ops->read(buf, len);
-
-//	if (!found || i == len - 1) {
-//		/* No \n found -> garbage data */
-//		return -EIO;
-//	}
-
-//	buf[i] = '\0';
-	return (ssize_t) 1;
-}
-
 void tinyiiod_write_char(struct tinyiiod *iiod, char c)
 {
 	iiod->ops->write(&c, 1);

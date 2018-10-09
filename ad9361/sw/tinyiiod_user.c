@@ -228,13 +228,20 @@ static ssize_t ch_read_attr(const char *device, const char *channel,
 	if (strequal(attr, "calibphase")) {
 			return (ssize_t) snprintf(buf, len, "%d", 2);
 	}
-	if (strequal(attr, "sampling_frequency_available")) {
-			return (ssize_t) snprintf(buf, len, "%d", 2);
-	}
-	if (strequal(attr, "sp")) {
+
+	if (strequal(attr, "sampling_frequency")) {
 		uint32_t sampling_freq_hz;
 		ad9361_get_rx_sampling_freq (ad9361_phy, &sampling_freq_hz);
 			return (ssize_t) snprintf(buf, len, "%d", sampling_freq_hz);
+	}
+	if (strequal(attr, "filter_fir_en")) {
+		uint8_t en_dis;
+		ad9361_get_rx_fir_en_dis (ad9361_phy, &en_dis);
+		return (ssize_t) snprintf(buf, len, "%d", en_dis);
+	}
+
+	if (strequal(attr, "sampling_frequency_available")) {
+			return (ssize_t) snprintf(buf, len, "%d", 2);
 	}
 	return -ENOENT;
 }
@@ -251,17 +258,22 @@ static ssize_t ch_write_attr(const char *device, const char *channel,
 
 	if (!dev_is_ad9361_module(device))
 			return -ENODEV;
-	/* Get rid of a leading /n */
-	//buf++;
-
 	/* We have no output channels */
-	if (ch_out)
-		return -ENOENT;
+	if (ch_out) {
 
-	if (strequal(attr, "sp")) {
-		uint32_t sampling_freq_hz = read_ul_value(buf);
-		ad9361_set_rx_sampling_freq (ad9361_phy, sampling_freq_hz);
+	}
+	else { //input channel attributes
+		if (strequal(attr, "sampling_frequency")) {
+			uint32_t sampling_freq_hz = read_ul_value(buf);
+			ad9361_set_rx_sampling_freq (ad9361_phy, sampling_freq_hz);
+				return len;
+		}
+		if (strequal(attr, "filter_fir_en")) {
+			uint8_t en_dis = read_ul_value(buf);
+			ad9361_set_rx_fir_en_dis (ad9361_phy, en_dis);
 			return len;
+		}
+
 	}
 
 

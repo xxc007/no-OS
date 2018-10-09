@@ -126,7 +126,7 @@ static const char * const  xml =
 		         "<attribute name=\"rf_dc_offset_tracking_en\" filename=\"in_voltage_rf_dc_offset_tracking_en\" />"
 		         "<attribute name=\"sampling_frequency_available\" filename=\"in_voltage_sampling_frequency_available\" />"
 		         "<attribute name=\"quadrature_tracking_en\" filename=\"in_voltage_quadrature_tracking_en\" />"
-		         "<attribute name=\"sp\" filename=\"in_voltage_sampling_frequency\" />"
+		         "<attribute name=\"sampling_frequency\" filename=\"in_voltage_sampling_frequency\" />"
 		         "<attribute name=\"gain_control_mode_available\" filename=\"in_voltage_gain_control_mode_available\" />"
 		         "<attribute name=\"filter_fir_en\" filename=\"in_voltage_filter_fir_en\" />"
 		         "<attribute name=\"rf_bandwidth_available\" filename=\"in_voltage_rf_bandwidth_available\" />"
