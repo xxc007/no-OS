@@ -291,7 +291,7 @@ static int open_dev(const char *device, size_t sample_size, uint32_t mask)
 	if (!dev_is_ad9361_module(device))
 		return -ENODEV;
 
-	if (mask & ~0x3)
+	if (mask & ~0x0F)
 		return -ENOENT;
 
 	channel_mask = mask;
@@ -324,6 +324,32 @@ static int get_mask(const char *device, uint32_t *mask)
 	return 0;
 }
 
+
+static ssize_t write_dev(const char *device, const char *buf, size_t bytes_count)
+{
+//	todo
+//	int i, sampleSize;
+//
+//	if (!dev_is_ad9361_module(device))
+//			return -ENODEV;
+//
+//	if(adc_st.rx2tx2)
+//		{
+//			sampleSize = bytes_count / 8;
+//		}
+//		else
+//		{
+//			sampleSize = bytes_count / 4;
+//		}
+//
+//	adc_capture(sampleSize, ADC_DDR_BASEADDR);
+//	Xil_DCacheInvalidateRange(ADC_DDR_BASEADDR,	bytes_count);
+//
+//	for ( i = 0; i < bytes_count; i++)
+//		buf[i] = Xil_In8(ADC_DDR_BASEADDR + i);
+
+	return bytes_count;
+}
 /***********************************************************************************************************************
 * Function Name: read_dev
 * Description  : None
@@ -374,5 +400,6 @@ const struct tinyiiod_ops ops = {
 	.close = close_dev,
 	.get_mask = get_mask,
 
-	.read_data = read_dev,
+	.read_device = read_dev,
+	.write_device = write_dev,
 };
