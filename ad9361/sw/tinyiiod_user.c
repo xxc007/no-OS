@@ -29,9 +29,10 @@
 #include "xil_io.h"
 #include "ad9361_api.h"
 
-
 static unsigned int addr_to_read;
-static uint32_t channel_mask;
+static uint32_t request_mask;
+// mask for cf-ad9361-lpc 0x0F, it has 4 channels
+static uint32_t input_channel_mask = 0x0F;
 extern struct ad9361_rf_phy *ad9361_phy;
 extern struct adc_state adc_st;
 int einval(void){
@@ -291,12 +292,14 @@ static int open_dev(const char *device, size_t sample_size, uint32_t mask)
 	if (!dev_is_ad9361_module(device))
 		return -ENODEV;
 
-	if (mask & ~0x0F)
+	if (mask & ~input_channel_mask)
 		return -ENOENT;
 
-	channel_mask = mask;
+	request_mask = mask;
 	return 0;
 }
+
+
 
 /***********************************************************************************************************************
 * Function Name: close_dev
@@ -320,10 +323,10 @@ static int get_mask(const char *device, uint32_t *mask)
 	if (!dev_is_ad9361_module(device))
 		return -ENODEV;
 
-	*mask = channel_mask;
+	//*mask = request_mask;
+	*mask = input_channel_mask; // this way client has to do demux of data
 	return 0;
 }
-
 
 static ssize_t write_dev(const char *device, const char *buf, size_t bytes_count)
 {

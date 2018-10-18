@@ -381,7 +381,7 @@ extern struct tinyiiod_ops ops;
 int main(void)
 {
 #if (USE_LIBIIO == YES)
-  struct tinyiiod *iiod;
+	struct tinyiiod *iiod;
 #endif
 
 #ifdef XILINX_PLATFORM
@@ -503,12 +503,13 @@ int main(void)
 #endif
 
 #if (USE_LIBIIO == YES)
-        /* Create the tinyiiod */
-   iiod = tinyiiod_create(xml, &ops);
+	init_uart();
+	/* Create the tinyiiod */
+	iiod = tinyiiod_create(xml, &ops);
 
-    while(1) {
-       tinyiiod_read_command(iiod);
-    }
+	while(1) {
+		tinyiiod_read_command(iiod);
+	}
 #endif
 
 #ifdef CONSOLE_COMMANDS

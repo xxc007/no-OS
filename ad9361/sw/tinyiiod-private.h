@@ -22,7 +22,6 @@
 
 char tinyiiod_read_char(struct tinyiiod *iiod);
 void tinyiiod_read(struct tinyiiod *iiod, char *buf, size_t len);
-ssize_t tinyiiod_read_line(struct tinyiiod *iiod, char *buf, size_t len);
 
 void tinyiiod_write_char(struct tinyiiod *iiod, char c);
 void tinyiiod_write(struct tinyiiod *iiod, const char *data, size_t len);

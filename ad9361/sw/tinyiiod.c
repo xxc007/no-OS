@@ -50,10 +50,10 @@ void tinyiiod_destroy(struct tinyiiod *iiod)
 int tinyiiod_read_command(struct tinyiiod *iiod)
 {
 	char buf[128];
-	memset(buf, 0, 128);
+
 	int ret;
 
-	ret = (int) tinyiiod_read_line(iiod, buf, sizeof(buf));
+	ret = serial_read_line(buf, sizeof(buf));
 	if (ret < 0)
 		return ret;
 
@@ -75,29 +75,6 @@ char tinyiiod_read_char(struct tinyiiod *iiod)
 void tinyiiod_read(struct tinyiiod *iiod, char *buf, size_t len)
 {
 	iiod->ops->read(buf, len);
-}
-
-ssize_t tinyiiod_read_line(struct tinyiiod *iiod, char *buf, size_t len)
-{
-	unsigned int i;
-	bool found = false;
-
-	for (i = 0; i < len - 1; i++) {
-		buf[i] = tinyiiod_read_char(iiod);
-
-		if (buf[i] != '\n' && buf[i] != '\r')
-			found = true;
-		else if (found)
-			break;
-	}
-
-	if (!found || i == len - 1) {
-		/* No \n found -> garbage data */
-		return -EIO;
-	}
-
-	buf[i] = '\0';
-	return (ssize_t) i;
 }
 
 void tinyiiod_write_char(struct tinyiiod *iiod, char c)
@@ -187,58 +164,25 @@ void tinyiiod_do_close(struct tinyiiod *iiod, const char *device)
 	tinyiiod_write_value(iiod, ret);
 }
 
+
 void tinyiiod_do_writebuf(struct tinyiiod *iiod,
 		const char *device, size_t bytes_count)
 {
-	int ret;
-	char buf[256];
-	uint32_t mask;
-	bool print_mask = true;
+	char *pbuffer = (char*)malloc(bytes_count);
+	if(pbuffer == NULL) {
+		return;
+	}
 
-	memset(buf, 0, 256);
-
+	memset(pbuffer, 0, bytes_count);
+	serial_read_line_nonblocking(pbuffer, bytes_count);
 	tinyiiod_write_value(iiod, (int) bytes_count);
-	tinyiiod_read(iiod, buf, bytes_count);
+	size_t bytes_received = serial_read_line_wait(bytes_count);
+	if(bytes_count != bytes_received) {
+		return;
+	}
 	tinyiiod_write_value(iiod, (int) bytes_count);
-
-
-
-
-
-
-//	ret = iiod->ops->get_mask(device, &mask);
-//	if (ret < 0) {
-//		tinyiiod_write_value(iiod, ret);
-//		return;
-//	}
-//
-//
-//	while(bytes_count) {
-//		size_t bytes = bytes_count > sizeof(buf) ? sizeof(buf) : bytes_count;
-//		// red device
-//
-//	}
-//
-//
-//	while(bytes_count) {
-//		size_t bytes = bytes_count > sizeof(buf) ? sizeof(buf) : bytes_count;
-//		// red device
-//		ret = (int) iiod->ops->read_device(device, buf, bytes);
-//		tinyiiod_write_value(iiod, ret);
-//		if (ret < 0)
-//			return;
-//
-//		if (print_mask) {
-//			char buf_mask[10];
-//
-//			snprintf(buf_mask, sizeof(buf_mask), "%08lx\n", mask);
-//			tinyiiod_write_string(iiod, buf_mask);
-//			print_mask = false;
-//		}
-//
-//		tinyiiod_write(iiod, buf, (size_t) ret);
-//		bytes_count -= (size_t) ret;
-//	}
+	iiod->ops->write_device(device, pbuffer, bytes_count);
+	free(pbuffer);
 }
 
 void tinyiiod_do_readbuf(struct tinyiiod *iiod,
@@ -248,7 +192,6 @@ void tinyiiod_do_readbuf(struct tinyiiod *iiod,
 	char buf[256];
 	uint32_t mask;
 	bool print_mask = true;
-	memset(buf, 0, 256);
 
 	ret = iiod->ops->get_mask(device, &mask);
 	if (ret < 0) {

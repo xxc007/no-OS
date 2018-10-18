@@ -63,5 +63,6 @@ struct tinyiiod * tinyiiod_create(const char *xml,
 		const struct tinyiiod_ops *ops);
 void tinyiiod_destroy(struct tinyiiod *iiod);
 int tinyiiod_read_command(struct tinyiiod *iiod);
+void tinyiiod_do_writebuf(struct tinyiiod *iiod, const char *device, size_t bytes_count);
 
 #endif /* TINYIIOD_H */
