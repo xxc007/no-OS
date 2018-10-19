@@ -128,8 +128,8 @@ static int parse_writebuf_string(struct tinyiiod *iiod, char *str)
 	if (str == ptr || *ptr != '\0' || bytes_count < 0)
 		return -EINVAL;
 
-	tinyiiod_do_writebuf(iiod, device, (size_t) bytes_count);
-	return 0;
+
+	return tinyiiod_do_writebuf(iiod, device, (size_t) bytes_count);
 }
 
 static int parse_readbuf_string(struct tinyiiod *iiod, char *str)

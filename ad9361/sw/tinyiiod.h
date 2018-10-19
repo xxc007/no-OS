@@ -34,7 +34,9 @@ struct tinyiiod;
 
 struct tinyiiod_ops {
 	/* Read from the input stream */
-	void (*read)(char *buf, size_t len);
+	int (*read)(char *buf, size_t len);
+	int (*read_nonbloking)(char *buf, size_t len);
+	int (*read_wait)(size_t len);
 
 	/* Write to the output stream */
 	void (*write)(const char *buf, size_t len);
@@ -63,6 +65,7 @@ struct tinyiiod * tinyiiod_create(const char *xml,
 		const struct tinyiiod_ops *ops);
 void tinyiiod_destroy(struct tinyiiod *iiod);
 int tinyiiod_read_command(struct tinyiiod *iiod);
-void tinyiiod_do_writebuf(struct tinyiiod *iiod, const char *device, size_t bytes_count);
+int tinyiiod_do_writebuf(struct tinyiiod *iiod, const char *device, size_t bytes_count);
 
 #endif /* TINYIIOD_H */
+

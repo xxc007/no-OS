@@ -1,65 +1,41 @@
-/******************************************************************************
-*
-* Copyright (C) 2010 - 2014 Xilinx, Inc.  All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* Use of the Software is limited solely to applications:
-* (a) running on a Xilinx device, or
-* (b) that interact with a Xilinx device through a bus or interconnect.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-* XILINX  BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-* WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
-* OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*
-* Except as contained in this notice, the name of the Xilinx shall not be used
-* in advertising or otherwise to promote the sale, use or other dealings in
-* this Software without prior written authorization from Xilinx.
-*
-******************************************************************************/
-/****************************************************************************/
-/**
-*
-* @file		xuartps_intr_example.c
-*
-* This file contains a design example using the XUartPs driver in interrupt
-* mode. It sends data and expects to receive the same data through the device
-* using the local loopback mode.
-*
-*
-* @note
-* The example contains an infinite loop such that if interrupts are not
-* working it may hang.
-*
-* MODIFICATION HISTORY:
-* <pre>
-* Ver   Who    Date     Changes
-* ----- ------ -------- ----------------------------------------------
-* 1.00a  drg/jz 01/13/10 First Release
-* 1.00a  sdm    05/25/11 Modified the example for supporting Peripheral tests
-*		        in SDK
-* 1.03a  sg     07/16/12 Updated the example for CR 666306. Modified
-*			the device ID to use the first Device Id
-*			and increased the receive timeout to 8
-*			Removed the printf at the start of the main
-*			Put the device normal mode at the end of the example
-* 3.1	kvn		04/10/15 Added code to support Zynq Ultrascale+ MP.
-* 3.1   mus     01/14/16 Added support for intc interrupt controller
-*
-* </pre>
-****************************************************************************/
+/***************************************************************************//**
+ *   @file   serial.c
+ *   @brief  Header file of Serial interface.
+ *   @author CPop (cristian.pop@analog.com)
+********************************************************************************
+ * Copyright 2013(c) Analog Devices, Inc.
+ *
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *  - Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  - Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *  - Neither the name of Analog Devices, Inc. nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *  - The use of this software may or may not infringe the patent rights
+ *    of one or more patent holders.  This license does not release you
+ *    from the requirement that you obtain separate licenses from these
+ *    patent holders to use this software.
+ *  - Use of the software either in source or binary form, must be run
+ *    on or directly connected to an Analog Devices Inc. component.
+ *
+ * THIS SOFTWARE IS PROVIDED BY ANALOG DEVICES "AS IS" AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, NON-INFRINGEMENT,
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL ANALOG DEVICES BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, INTELLECTUAL PROPERTY RIGHTS, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*******************************************************************************/
 
 /***************************** Include Files *******************************/
 
@@ -130,37 +106,30 @@ volatile int TotalReceivedCount;
 volatile int TotalSentCount;
 int TotalErrorCount;
 
-/**************************************************************************/
-/**
-*
-* Main function to call the Uart interrupt example.
-*
-* @param	None
-*
-* @return	XST_SUCCESS if successful, XST_FAILURE if unsuccessful
-*
-* @note		None
-*
-**************************************************************************/
 int serial_read_line(char *buf, size_t len) {
-	XUartPs_Recv(&UartPs, (u8*)buf, len);
-	do {
-	} while(!bytes_recived && len != TotalReceivedCount);
-	bytes_recived = false;
+	unsigned int i;
+	bool found = false;
 
-	char *ptr = strstr(buf, "\r\n");
-	if(ptr) {
-		*ptr = '\0';
-		return TotalReceivedCount;
+	for (i = 0; i < len - 1; i++) {
+		buf[i] = inbyte();
+		if (buf[i] != '\n' && buf[i] != '\r')
+			found = true;
+		else if (found)
+			break;
 	}
-	if(len == TotalReceivedCount) {
-		TotalReceivedCount;
+
+	if (!found || i == len - 1) {
+		/* No \n found -> garbage data */
+		return -EIO;
 	}
-	return -EIO;
+
+	buf[i] = '\0';
+	return (ssize_t) i;
 }
 
-void serial_read_line_nonblocking(char *buf, size_t len) {
+int serial_read_line_nonblocking(char *buf, size_t len) {
 	XUartPs_Recv(&UartPs, (u8*)buf, len);
+	return 0;
 }
 
 int serial_read_line_wait(size_t len) {
@@ -183,34 +152,7 @@ int init_uart(void)
 	return XST_SUCCESS;
 }
 
-/**************************************************************************/
-/**
-*
-* This function does a minimal test on the UartPS device and driver as a
-* design example. The purpose of this function is to illustrate
-* how to use the XUartPs driver.
-*
-* This function sends data and expects to receive the same data through the
-* device using the local loopback mode.
-*
-* This function uses interrupt mode of the device.
-*
-* @param	IntcInstPtr is a pointer to the instance of the Scu Gic driver.
-* @param	UartInstPtr is a pointer to the instance of the UART driver
-*		which is going to be connected to the interrupt controller.
-* @param	DeviceId is the device Id of the UART device and is typically
-*		XPAR_<UARTPS_instance>_DEVICE_ID value from xparameters.h.
-* @param	UartIntrId is the interrupt Id and is typically
-*		XPAR_<UARTPS_instance>_INTR value from xparameters.h.
-*
-* @return	XST_SUCCESS if successful, otherwise XST_FAILURE.
-*
-* @note
-*
-* This function contains an infinite loop such that if interrupts are not
-* working it may never return.
-*
-**************************************************************************/
+
 int UartPsIntrExample(INTC *IntcInstPtr, XUartPs *UartInstPtr,
 			u16 DeviceId, u16 UartIntrId)
 {

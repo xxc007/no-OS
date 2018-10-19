@@ -28,6 +28,8 @@
 #include "parameters.h"
 #include "xil_io.h"
 #include "ad9361_api.h"
+#include "serial.h"
+#include "xil_cache.h"
 
 static unsigned int addr_to_read;
 static uint32_t request_mask;
@@ -50,15 +52,19 @@ int enoent(void){
 * Arguments    : None
 * Return Value : None
 ***********************************************************************************************************************/
-static void read_data(char *buf, size_t len)
+static int read_data(char *buf, size_t len)
 {
-	uint8_t i, ret;
-	ret = read(0, buf, len);
+	return serial_read_line(buf, len);
+}
 
-	if (ret < len)
-		read(0, buf, len);
-//	for(i = 0; i < len; i++)
-//		*(buf + i) = inbyte();
+static int read_nonbloking(char *buf, size_t len)
+{
+	return serial_read_line_nonblocking(buf, len);
+}
+
+static int read_wait(size_t len)
+{
+	return serial_read_line_wait(len);
 }
 
 /***********************************************************************************************************************
@@ -171,7 +177,6 @@ static int write_reg(unsigned int addr, uint32_t value)
 ***********************************************************************************************************************/
 static int read_reg(unsigned int addr, uint32_t *value)
 {
-
 	return 0;
 }
 
@@ -218,13 +223,13 @@ static ssize_t ch_read_attr(const char *device, const char *channel,
 
 	if (strequal(attr, "Sensor")) {
 				ad9361_get_temperature(ad9361_phy, &temp);
-				return (ssize_t) snprintf(buf, len, "%d", temp);
+				return (ssize_t) snprintf(buf, len, "%d", (int)temp);
 			}
 	if (strequal(attr, "voltage0")) {
 		return (ssize_t) snprintf(buf, len, "%d", 2);
 	}
 	if (strequal(attr, "calibscale")) {
-			return (ssize_t) snprintf(buf, len, "%d", "66");
+			return (ssize_t) snprintf(buf, len, "%d", 66);
 	}
 	if (strequal(attr, "calibphase")) {
 			return (ssize_t) snprintf(buf, len, "%d", 2);
@@ -233,7 +238,7 @@ static ssize_t ch_read_attr(const char *device, const char *channel,
 	if (strequal(attr, "sampling_frequency")) {
 		uint32_t sampling_freq_hz;
 		ad9361_get_rx_sampling_freq (ad9361_phy, &sampling_freq_hz);
-			return (ssize_t) snprintf(buf, len, "%d", sampling_freq_hz);
+			return (ssize_t) snprintf(buf, len, "%d", (int)sampling_freq_hz);
 	}
 	if (strequal(attr, "filter_fir_en")) {
 		uint8_t en_dis;
@@ -391,18 +396,22 @@ static ssize_t read_dev(const char *device, char *buf, size_t bytes_count)
 * Return Value : None
 ***********************************************************************************************************************/
 const struct tinyiiod_ops ops = {
+	//communication
 	.read = read_data,
+	.read_nonbloking = read_nonbloking,
+	.read_wait = read_wait,
 	.write = write_data,
 
+	//device operations
 	.read_attr = read_attr,
 	.write_attr = write_attr,
 	.ch_read_attr = ch_read_attr,
 	.ch_write_attr = ch_write_attr,
+	.read_device = read_dev,
+	.write_device = write_dev,
 
+	//
 	.open = open_dev,
 	.close = close_dev,
 	.get_mask = get_mask,
-
-	.read_device = read_dev,
-	.write_device = write_dev,
 };
