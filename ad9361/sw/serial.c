@@ -97,7 +97,7 @@ void Handler(void *CallBackRef, u32 Event, unsigned int EventData);
 XUartPs UartPs	;		/* Instance of the UART Device */
 INTC InterruptController;	/* Instance of the Interrupt Controller */
 
-static volatile bool bytes_recived = false; /* is set in XUARTPS_EVENT_RECV_TOUT timeout interrupt, this way we know when a chunk of data ended */
+static volatile bool bytes_received_timeout = false; /* is set in XUARTPS_EVENT_RECV_TOUT timeout interrupt, this way we know when a chunk of data ended */
 /*
  * The following counters are used to determine when the entire buffer has
  * been sent and received.
@@ -106,36 +106,73 @@ volatile int TotalReceivedCount;
 volatile int TotalSentCount;
 int TotalErrorCount;
 
-int serial_read_line(char *buf, size_t len) {
-	unsigned int i;
-	bool found = false;
-
-	for (i = 0; i < len - 1; i++) {
-		buf[i] = inbyte();
-		if (buf[i] != '\n' && buf[i] != '\r')
-			found = true;
-		else if (found)
-			break;
+//int serial_read_line(char *buf, size_t len) {
+//	unsigned int i;
+//	bool found = false;
+//
+//	for (i = 0; i < len - 1; i++) {
+//		buf[i] = inbyte();
+//		if (buf[i] != '\n' && buf[i] != '\r')
+//			found = true;
+//		else if (found)
+//			break;
+//	}
+//
+//	if (!found || i == len - 1) {
+//		/* No \n found -> garbage data */
+//		return -EIO;
+//	}
+//
+//	buf[i] = '\0';
+//	return (ssize_t) i;
+//}
+#define BUFFERL_LENGTH 128
+static char buffer[BUFFERL_LENGTH];
+static char *pnext = buffer;
+static char *pcurr = buffer;
+int serial_read_line(char *buf, size_t len)
+{
+	if(pcurr == buffer) // trigger a new receive
+	{
+		XUartPs_Recv(&UartPs, (u8*)pcurr, BUFFERL_LENGTH);
+		do
+		{
+		} while(!bytes_received_timeout && BUFFERL_LENGTH != TotalReceivedCount);
 	}
-
-	if (!found || i == len - 1) {
-		/* No \n found -> garbage data */
-		return -EIO;
+	bytes_received_timeout = false;
+	pnext = strstr(pcurr, "\r\n");
+	if(pnext)
+	{
+		*pnext = '\0';
+		pnext++;
+		*pnext = '\0';
+		pnext++;
 	}
-
-	buf[i] = '\0';
-	return (ssize_t) i;
+	int cmd_length = strlen(pcurr);
+	memcpy(buf, pcurr, cmd_length);
+	if(TotalReceivedCount > cmd_length + 2 && pnext) // in case two commands have been received, point to the next command
+	{
+		TotalReceivedCount -= (strlen(pcurr) + 2);
+		pcurr = pnext;
+	}
+	else
+	{
+		memset(buffer, 0, BUFFERL_LENGTH);
+		pcurr = buffer;
+	}
+	return strlen(pcurr);
 }
 
-int serial_read_line_nonblocking(char *buf, size_t len) {
+
+int serial_read_nonblocking(char *buf, size_t len) {
 	XUartPs_Recv(&UartPs, (u8*)buf, len);
 	return 0;
 }
 
-int serial_read_line_wait(size_t len) {
+int serial_read_wait(size_t len) {
 	do {
-	} while(!bytes_recived && len != TotalReceivedCount);
-	bytes_recived = false;
+	} while(!bytes_received_timeout && len != TotalReceivedCount);
+	bytes_received_timeout = false;
 	return TotalReceivedCount;
 }
 
@@ -272,7 +309,7 @@ void Handler(void *CallBackRef, u32 Event, unsigned int EventData)
 	 */
 	if (Event == XUARTPS_EVENT_RECV_TOUT) {
 		TotalReceivedCount = EventData;
-		bytes_recived = true;
+		bytes_received_timeout = true;
 	}
 
 	/*

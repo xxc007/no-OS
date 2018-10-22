@@ -82,7 +82,7 @@ int tinyiiod_read_nonblocking(struct tinyiiod *iiod, char *buf, size_t len)
 	return iiod->ops->read_nonbloking(buf, len);
 }
 
-int read_wait(struct tinyiiod *iiod, size_t len)
+int tinyiiod_read_wait(struct tinyiiod *iiod, size_t len)
 {
 	return iiod->ops->read_wait(len);
 }
@@ -174,27 +174,71 @@ void tinyiiod_do_close(struct tinyiiod *iiod, const char *device)
 	tinyiiod_write_value(iiod, ret);
 }
 
-
+extern struct ad9361_rf_phy *ad9361_phy;
+// todo this needs to be solved
+//tried with tinyiiod_do_writebuf_1, and malloc fails sometimes
+//tried with tinyiiod_do_writebuf_2, and data is lost for buffers > BUFFER_SIZE
+//static char buffer[1 << 24];
+static char buffer[2048];
 int tinyiiod_do_writebuf(struct tinyiiod *iiod,
 		const char *device, size_t bytes_count)
 {
-	char *pbuffer = (char*)malloc(bytes_count);
-	if(pbuffer == NULL) {
-		return -ENOMEM;
-	}
-
-	memset(pbuffer, 0, bytes_count);
-	serial_read_line_nonblocking(pbuffer, bytes_count);
+	tinyiiod_read_nonblocking(iiod, buffer, bytes_count);
 	tinyiiod_write_value(iiod, (int) bytes_count);
-	size_t bytes_received = serial_read_line_wait(bytes_count);
+	size_t bytes_received = tinyiiod_read_wait(iiod, bytes_count);
 	if(bytes_count != bytes_received) {
 		return -EPIPE;
 	}
+
 	tinyiiod_write_value(iiod, (int) bytes_count);
-	iiod->ops->write_device(device, pbuffer, bytes_count);
-	free(pbuffer);
+	iiod->ops->write_device(device, buffer, bytes_count);
+
 	return 0;
 }
+
+//int tinyiiod_do_writebuf_1(struct tinyiiod *iiod,
+//		const char *device, size_t bytes_count)
+//{
+//	char *pbuffer = (char*)malloc(bytes_count);
+//	if(pbuffer == NULL) {
+//		return -ENOMEM;
+//	}
+//	//char pbuffer[2048];
+//	memset(pbuffer, 0, bytes_count);
+//	serial_read_nonblocking(pbuffer, bytes_count);
+//	tinyiiod_write_value(iiod, (int) bytes_count);
+//	size_t bytes_received = serial_read_wait(bytes_count);
+//	if(bytes_count != bytes_received) {
+//		return -EPIPE;
+//	}
+//	tinyiiod_write_value(iiod, (int) bytes_count);
+//	iiod->ops->write_device(device, pbuffer, bytes_count);
+//	free(pbuffer);
+//	return 0;
+//}
+//
+//int tinyiiod_do_writebuf_2(struct tinyiiod *iiod,
+//		const char *device, size_t bytes_count)
+//{
+//#define BUFFER_SIZE 1024
+//	char pbuffer[2][BUFFER_SIZE];
+//	memset(pbuffer[0], 0, BUFFER_SIZE);
+//	memset(pbuffer[1], 0, BUFFER_SIZE);
+//	int i = 0;
+//	do {
+//		//int bytes_to_read = BUFFER_SIZE > bytes_count ? bytes_count : BUFFER_SIZE;
+//		serial_read_nonblocking(pbuffer[i % 2], BUFFER_SIZE);
+//		if(i == 0)
+//			tinyiiod_write_value(iiod, (int) bytes_count);
+//		size_t bytes_received = serial_read_wait(BUFFER_SIZE);
+//		if(BUFFER_SIZE != bytes_received) {
+//			return -EPIPE;
+//		}
+//
+//		i++;
+//	}while(BUFFER_SIZE * i < bytes_count);
+//	return 0;
+//}
 
 void tinyiiod_do_readbuf(struct tinyiiod *iiod,
 		const char *device, size_t bytes_count)

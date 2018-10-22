@@ -25,6 +25,7 @@
 #include "tinyiiod.h"
 #include "tinyiiod_user.h"
 #include "adc_core.h"
+#include "dac_core.h"
 #include "parameters.h"
 #include "xil_io.h"
 #include "ad9361_api.h"
@@ -59,12 +60,12 @@ static int read_data(char *buf, size_t len)
 
 static int read_nonbloking(char *buf, size_t len)
 {
-	return serial_read_line_nonblocking(buf, len);
+	return serial_read_nonblocking(buf, len);
 }
 
 static int read_wait(size_t len)
 {
-	return serial_read_line_wait(len);
+	return serial_read_wait(len);
 }
 
 /***********************************************************************************************************************
@@ -355,7 +356,7 @@ static ssize_t write_dev(const char *device, const char *buf, size_t bytes_count
 //
 //	for ( i = 0; i < bytes_count; i++)
 //		buf[i] = Xil_In8(ADC_DDR_BASEADDR + i);
-
+	dac_write_buffer(device, 0, 0);
 	return bytes_count;
 }
 /***********************************************************************************************************************

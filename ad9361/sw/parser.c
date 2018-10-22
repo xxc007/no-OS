@@ -77,7 +77,6 @@ static int parse_rw_string(struct tinyiiod *iiod, char *str, bool write)
 				output, attr, debug);
 		return 0;
 	}
-
 	bytes = strtol(str, &ptr, 10);
 	if (str == ptr || bytes < 0)
 		return -EINVAL;
@@ -155,8 +154,8 @@ static int parse_readbuf_string(struct tinyiiod *iiod, char *str)
 
 int tinyiiod_parse_string(struct tinyiiod *iiod, char *str)
 {
-	while (*str == '\n' || *str == '\r')
-		str++;
+//	while (*str == '\n' || *str == '\r')
+//		str++;
 
 	if (str[0] == '\0')
 		return 0;
