@@ -620,7 +620,7 @@ int32_t ad9361_spi_read(struct spi_device *spi, uint32_t reg)
  * @param offset The mask offset.
  * @return The bits value or negative error code in case of failure.
  */
-static int32_t __ad9361_spi_readf(struct spi_device *spi, uint32_t reg,
+int32_t __ad9361_spi_readf(struct spi_device *spi, uint32_t reg,
 	uint32_t mask, uint32_t offset)
 {
 	uint8_t buf;

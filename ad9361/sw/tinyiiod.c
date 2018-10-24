@@ -143,7 +143,7 @@ void tinyiiod_do_write_attr(struct tinyiiod *iiod, const char *device,
 		const char *channel, bool ch_out, const char *attr,
 		size_t bytes, bool debug)
 {
-	char buf[128];
+	char buf[128] = {0};
 	ssize_t ret;
 
 	if (bytes > sizeof(buf))
