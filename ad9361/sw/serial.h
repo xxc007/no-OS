@@ -42,6 +42,8 @@
 
 int serial_read_line(char *buf);
 
+int serial_read(char *buf, size_t len);
+
 int serial_read_nonblocking(char *buf, size_t len);
 
 int serial_read_wait(size_t len);

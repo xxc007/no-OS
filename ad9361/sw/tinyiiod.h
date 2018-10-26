@@ -33,6 +33,7 @@
 struct tinyiiod;
 
 struct tinyiiod_ops {
+	int (*read)(char *buf, size_t len);
 	/* Read from the input stream */
 	int (*read_line)(char *buf);
 	int (*read_nonbloking)(char *buf, size_t len);

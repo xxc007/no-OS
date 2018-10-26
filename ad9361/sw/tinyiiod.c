@@ -69,6 +69,11 @@ char tinyiiod_read_char(struct tinyiiod *iiod)
 	return 0;
 }
 
+int tinyiiod_read(struct tinyiiod *iiod, char *buf, size_t len)
+{
+	return iiod->ops->read(buf, len);
+}
+
 int tinyiiod_read_line(struct tinyiiod *iiod, char *buf)
 {
 	return iiod->ops->read_line(buf);
@@ -145,8 +150,7 @@ void tinyiiod_do_write_attr(struct tinyiiod *iiod, const char *device,
 
 	if (bytes > sizeof(buf))
 		bytes = sizeof(buf);
-	tinyiiod_read_nonblocking(iiod, buf, bytes);
-	tinyiiod_read_wait(iiod, bytes);
+	tinyiiod_read(iiod, buf, bytes);
 
 	buf[bytes] = '\0';
 
@@ -175,8 +179,8 @@ void tinyiiod_do_close(struct tinyiiod *iiod, const char *device)
 // todo this needs to be solved
 //tried with tinyiiod_do_writebuf_1, and malloc fails sometimes
 //tried with tinyiiod_do_writebuf_2, and data is lost for buffers > BUFFER_SIZE
-//static char buffer[1 << 24];
-static char buffer[2048];
+static char buffer[1 << 24];
+//static char buffer[2048];
 int tinyiiod_do_writebuf(struct tinyiiod *iiod,
 		const char *device, size_t bytes_count)
 {

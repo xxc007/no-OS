@@ -58,6 +58,10 @@ static int read_line(char *buf)
 	return serial_read_line(buf);
 }
 
+static int read(char *buf, size_t len) {
+	return serial_read(buf, len);
+}
+
 static int read_nonbloking(char *buf, size_t len)
 {
 	return serial_read_nonblocking(buf, len);
@@ -575,6 +579,7 @@ static ssize_t read_dev(const char *device, char *buf, size_t bytes_count)
 ***********************************************************************************************************************/
 const struct tinyiiod_ops ops = {
 	//communication
+	.read = read,
 	.read_line = read_line,
 	.read_nonbloking = read_nonbloking,
 	.read_wait = read_wait,

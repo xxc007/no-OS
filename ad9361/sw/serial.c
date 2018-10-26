@@ -106,43 +106,20 @@ volatile int TotalReceivedCount;
 volatile int TotalSentCount;
 int TotalErrorCount;
 
-//int serial_read_line(char *buf, size_t len) {
-//	unsigned int i;
-//	bool found = false;
-//
-//	for (i = 0; i < len - 1; i++) {
-//		buf[i] = inbyte();
-//		if (buf[i] != '\n' && buf[i] != '\r')
-//			found = true;
-//		else if (found)
-//			break;
-//	}
-//
-//	if (!found || i == len - 1) {
-//		/* No \n found -> garbage data */
-//		return -EIO;
-//	}
-//
-//	buf[i] = '\0';
-//	return (ssize_t) i;
-//}
-#define BUFFERL_LENGTH 128
+#define BUFFERL_LENGTH 2048
 static char buffer[BUFFERL_LENGTH];
 static char *pnext = buffer;
 static char *pcurr = buffer;
-int serial_read_line(char *buf)
-{
-	if(pcurr == buffer) // trigger a new receive
-	{
+
+int serial_read_line(char *buf) {
+	if(pcurr == buffer) { // trigger a new receive
 		XUartPs_Recv(&UartPs, (u8*)pcurr, BUFFERL_LENGTH);
-		do
-		{
+		do {
 		} while(!bytes_received_timeout && BUFFERL_LENGTH != TotalReceivedCount);
 	}
 	bytes_received_timeout = false;
 	pnext = strstr(pcurr, "\r\n");
-	if(pnext)
-	{
+	if(pnext) {
 		*pnext = '\0';
 		pnext++;
 		*pnext = '\0';
@@ -150,19 +127,57 @@ int serial_read_line(char *buf)
 	}
 	int cmd_length = strlen(pcurr);
 	memcpy(buf, pcurr, cmd_length);
-	if(TotalReceivedCount > cmd_length + 2 && pnext) // in case two commands have been received, point to the next command
-	{
+	if(TotalReceivedCount > cmd_length + 2 && pnext) { // in case two commands have been received, point to the next command
 		TotalReceivedCount -= (strlen(pcurr) + 2);
 		pcurr = pnext;
 	}
-	else
-	{
+	else {
 		memset(buffer, 0, BUFFERL_LENGTH);
 		pcurr = buffer;
+		TotalReceivedCount = 0;
 	}
 	return strlen(pcurr);
 }
 
+int serial_read(char *buf, size_t len) {
+	size_t receive_len = len;
+	if(TotalReceivedCount) {
+		if(len == TotalReceivedCount) {
+			memcpy(buf, pcurr, len);
+			pcurr = buffer;
+			TotalReceivedCount = 0;
+			return len;
+		}
+		else if(len > TotalReceivedCount) {
+			memcpy(buf, pcurr, TotalReceivedCount);
+			pcurr = buffer;
+			receive_len -= TotalReceivedCount;
+			TotalReceivedCount = 0;
+		}
+		else { // len < TotalReceivedCount
+			memcpy(buf, pcurr, len);
+			pcurr += len;
+			TotalReceivedCount -= len;
+			return len;
+		}
+	}
+	XUartPs_Recv(&UartPs, (u8*)pcurr, receive_len);
+	do {
+	} while(!bytes_received_timeout && receive_len != TotalReceivedCount);
+	bytes_received_timeout = false;
+	return TotalReceivedCount + receive_len;
+}
+
+int serial_read_line1(char *buf) {
+	int i = 0;
+	do{
+		buf[i] = inbyte();
+		i++;
+	}while(buf[i - 1] != '\n');
+	buf[i - 2] = '\0';
+	buf[i - 1] = '\0';
+	return i;
+}
 
 int serial_read_nonblocking(char *buf, size_t len) {
 	XUartPs_Recv(&UartPs, (u8*)buf, len);
