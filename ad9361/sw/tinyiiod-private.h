@@ -21,7 +21,7 @@
 #include "tinyiiod.h"
 
 char tinyiiod_read_char(struct tinyiiod *iiod);
-int tinyiiod_read(struct tinyiiod *iiod, char *buf, size_t len);
+int tinyiiod_read_line(struct tinyiiod *iiod, char *buf);
 
 void tinyiiod_write_char(struct tinyiiod *iiod, char c);
 void tinyiiod_write(struct tinyiiod *iiod, const char *data, size_t len);

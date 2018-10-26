@@ -53,7 +53,7 @@ int tinyiiod_read_command(struct tinyiiod *iiod)
 
 	int ret;
 	memset(buf, 0, sizeof(buf));
-	ret = tinyiiod_read(iiod, buf, sizeof(buf));
+	ret = tinyiiod_read_line(iiod, buf);
 	if (ret < 0)
 			tinyiiod_write_value(iiod, ret);
 
@@ -66,15 +66,12 @@ int tinyiiod_read_command(struct tinyiiod *iiod)
 
 char tinyiiod_read_char(struct tinyiiod *iiod)
 {
-	char c;
-
-	iiod->ops->read(&c, 1);
-	return c;
+	return 0;
 }
 
-int tinyiiod_read(struct tinyiiod *iiod, char *buf, size_t len)
+int tinyiiod_read_line(struct tinyiiod *iiod, char *buf)
 {
-	return iiod->ops->read(buf, len);
+	return iiod->ops->read_line(buf);
 }
 
 int tinyiiod_read_nonblocking(struct tinyiiod *iiod, char *buf, size_t len)
@@ -143,13 +140,14 @@ void tinyiiod_do_write_attr(struct tinyiiod *iiod, const char *device,
 		const char *channel, bool ch_out, const char *attr,
 		size_t bytes, bool debug)
 {
-	char buf[128] = {0};
+	char buf[2048] = {0};
 	ssize_t ret;
 
 	if (bytes > sizeof(buf))
 		bytes = sizeof(buf);
+	tinyiiod_read_nonblocking(iiod, buf, bytes);
+	tinyiiod_read_wait(iiod, bytes);
 
-	tinyiiod_read(iiod, buf, bytes);
 	buf[bytes] = '\0';
 
 	if (channel)
@@ -174,7 +172,6 @@ void tinyiiod_do_close(struct tinyiiod *iiod, const char *device)
 	tinyiiod_write_value(iiod, ret);
 }
 
-extern struct ad9361_rf_phy *ad9361_phy;
 // todo this needs to be solved
 //tried with tinyiiod_do_writebuf_1, and malloc fails sometimes
 //tried with tinyiiod_do_writebuf_2, and data is lost for buffers > BUFFER_SIZE

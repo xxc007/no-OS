@@ -53,9 +53,9 @@ int enoent(void){
 * Arguments    : None
 * Return Value : None
 ***********************************************************************************************************************/
-static int read_data(char *buf, size_t len)
+static int read_line(char *buf)
 {
-	return serial_read_line(buf, len);
+	return serial_read_line(buf);
 }
 
 static int read_nonbloking(char *buf, size_t len)
@@ -116,12 +116,9 @@ static ssize_t i_to_string(char *buf, size_t len, int value)
 ***********************************************************************************************************************/
 static bool dev_is_ad9361_module(const char *device)
 {
-	return strequal(device, "temp_module")
-			|| strequal(device, "iio:device0")
-			|| strequal(device, "iio:device1")
-			|| strequal(device, "iio:device2")
-			|| strequal(device, "iio:device3")
-			|| strequal(device, "iio:device4");
+	return strequal(device, "ad9361-phy")
+			|| strequal(device, "cf-ad9361-lpc")
+			|| strequal(device, "cf-ad9361-dds-core-lpc");
 }
 
 /***********************************************************************************************************************
@@ -182,6 +179,8 @@ static int read_reg(unsigned int addr, uint32_t *value)
 }
 
 extern const char *ad9361_ensm_states[12]; // todo add interface for it
+extern int32_t ad9361_parse_fir(struct ad9361_rf_phy *phy,
+	char *data, uint32_t size);
 /***********************************************************************************************************************
 * Function Name: read_attr
 * Description  : None
@@ -193,80 +192,97 @@ static ssize_t read_attr(const char *device, const char *attr,
 {
 	int ret = 0;
 	unsigned long clk[6];
-	if(strequal(attr, "rx_path_rates")) {
-		ad9361_get_trx_clock_chain(ad9361_phy, clk, NULL);
-		ret = sprintf(buf, "BBPLL:%lu ADC:%lu R2:%lu R1:%lu RF:%lu RXSAMP:%lu\n",
-				  clk[0], clk[1], clk[2], clk[3], clk[4], clk[5]);
-		return ret;
-	}
-	if(strequal(attr, "tx_path_rates")) {
-		ad9361_get_trx_clock_chain(ad9361_phy, NULL, clk);
-		ret = sprintf(buf, "BBPLL:%lu DAC:%lu T2:%lu T1:%lu TF:%lu TXSAMP:%lu\n",
-				  clk[0], clk[1], clk[2], clk[3], clk[4], clk[5]);
-		return ret;
-	}
-	if(strequal(attr, "trx_rate_governor_available")) {
-		ret = sprintf(buf, "%s", "nominal highest_osr");
-		return ret;
-	}
-	if(strequal(attr, "trx_rate_governor")) {
-		uint32_t rate_governor;
-		ad9361_get_trx_rate_gov (ad9361_phy, &rate_governor);
-		ret = sprintf(buf, "%s", rate_governor ? "nominal" : "highest_osr");
-		return ret;
-	}
-	if(strequal(attr, "dcxo_tune_coarse_available")) {
-		ret = sprintf(buf, "%s", ad9361_phy->pdata->use_extclk ? "[0 0 0]" : "[0 1 63]");
-		return ret;
-	}
-	if (strequal(attr, "dcxo_tune_coarse")) {
-		if (ad9361_phy->pdata->use_extclk)
-			ret = -ENODEV;
-		else
-			ret = sprintf(buf, "%d", (int)ad9361_phy->pdata->dcxo_coarse);
-		return ret;
-	}
-	if(strequal(attr, "dcxo_tune_fine_available")) {
-		ret = sprintf(buf, "%s", ad9361_phy->pdata->use_extclk ? "[0 0 0]" : "[0 1 8191]");
-		return ret;
-	}
-	if (strequal(attr, "dcxo_tune_fine")) {
-		if (ad9361_phy->pdata->use_extclk)
-			ret = -ENODEV;
-		else
-			ret = sprintf(buf, "%d", (int)ad9361_phy->pdata->dcxo_fine);
-		return ret;
-	}
-	if (strequal(attr, "calib_mode_available")) {
-		return (ssize_t) sprintf(buf, "auto manual tx_quad rf_dc_offs rssi_gain_step\n");
-	}
-	if (strequal(attr, "calib_mode")) {
-		uint8_t en_dis;
-		ad9361_get_tx_auto_cal_en_dis(ad9361_phy, &en_dis);
-		return (ssize_t) snprintf(buf, len, "%s", en_dis ? "auto" : "manual");
-	}
-	if (strequal(attr, "xo_correction_available")) {
-		//todo
-		//clk[0] = clk_get_rate(ad9361_phy, ad9361_phy->ref_clk_scale[BB_REFCLK]);
 
-	}
-	if (strequal(attr, "ensm_mode_available")) {
-
-		return (ssize_t) sprintf(buf, "%s", ad9361_phy->pdata->fdd ?
-				"sleep wait alert fdd pinctrl pinctrl_fdd_indep" :
-				"sleep wait alert rx tx pinctrl");
-	}
-	if (strequal(attr, "ensm_mode")) {
-		ret = ad9361_ensm_get_state(ad9361_phy);
-		if (ret < 0)
+	if (!dev_is_ad9361_module(device))
+		return -ENODEV;
+	if(strequal(device, "ad9361-phy")) { // global attributes
+		if(strequal(attr, "rx_path_rates")) {
+			ad9361_get_trx_clock_chain(ad9361_phy, clk, NULL);
+			ret = sprintf(buf, "BBPLL:%lu ADC:%lu R2:%lu R1:%lu RF:%lu RXSAMP:%lu",
+					  clk[0], clk[1], clk[2], clk[3], clk[4], clk[5]);
 			return ret;
-		if (ret >= ARRAY_SIZE(ad9361_ensm_states) ||
-			ad9361_ensm_states[ret] == NULL) {
-			return -EIO;
 		}
-		return sprintf(buf, "%s", ad9361_ensm_states[ret]);
+		if(strequal(attr, "tx_path_rates")) {
+			ad9361_get_trx_clock_chain(ad9361_phy, NULL, clk);
+			ret = sprintf(buf, "BBPLL:%lu DAC:%lu T2:%lu T1:%lu TF:%lu TXSAMP:%lu",
+					  clk[0], clk[1], clk[2], clk[3], clk[4], clk[5]);
+			return ret;
+		}
+		if(strequal(attr, "trx_rate_governor_available")) {
+			ret = sprintf(buf, "%s", "nominal highest_osr");
+			return ret;
+		}
+		if(strequal(attr, "trx_rate_governor")) {
+			uint32_t rate_governor;
+			ad9361_get_trx_rate_gov (ad9361_phy, &rate_governor);
+			ret = sprintf(buf, "%s", rate_governor ? "nominal" : "highest_osr");
+			return ret;
+		}
+		if(strequal(attr, "dcxo_tune_coarse_available")) {
+			ret = sprintf(buf, "%s", ad9361_phy->pdata->use_extclk ? "[0 0 0]" : "[0 1 63]");
+			return ret;
+		}
+		if (strequal(attr, "dcxo_tune_coarse")) {
+			if (ad9361_phy->pdata->use_extclk)
+				ret = -ENODEV;
+			else
+				ret = sprintf(buf, "%d", (int)ad9361_phy->pdata->dcxo_coarse);
+			return ret;
+		}
+		if(strequal(attr, "dcxo_tune_fine_available")) {
+			ret = sprintf(buf, "%s", ad9361_phy->pdata->use_extclk ? "[0 0 0]" : "[0 1 8191]");
+			return ret;
+		}
+		if (strequal(attr, "dcxo_tune_fine")) {
+			if (ad9361_phy->pdata->use_extclk)
+				ret = -ENODEV;
+			else
+				ret = sprintf(buf, "%d", (int)ad9361_phy->pdata->dcxo_fine);
+			return ret;
+		}
+		if (strequal(attr, "calib_mode_available")) {
+			return (ssize_t) sprintf(buf, "auto manual tx_quad rf_dc_offs rssi_gain_step");
+		}
+		if (strequal(attr, "calib_mode")) {
+			uint8_t en_dis;
+			ad9361_get_tx_auto_cal_en_dis(ad9361_phy, &en_dis);
+			return (ssize_t) snprintf(buf, len, "%s", en_dis ? "auto" : "manual");
+		}
+		if (strequal(attr, "xo_correction_available")) {
+			//todo
+			//clk[0] = clk_get_rate(ad9361_phy, ad9361_phy->ref_clk_scale[BB_REFCLK]);
+
+		}
+		if (strequal(attr, "ensm_mode_available")) {
+
+			return (ssize_t) sprintf(buf, "%s", ad9361_phy->pdata->fdd ?
+					"sleep wait alert fdd pinctrl pinctrl_fdd_indep" :
+					"sleep wait alert rx tx pinctrl");
+		}
+		if (strequal(attr, "ensm_mode")) {
+			ret = ad9361_ensm_get_state(ad9361_phy);
+			if (ret < 0)
+				return ret;
+			if (ret >= ARRAY_SIZE(ad9361_ensm_states) ||
+				ad9361_ensm_states[ret] == NULL) {
+				return -EIO;
+			}
+			return sprintf(buf, "%s", ad9361_ensm_states[ret]);
+		}
+		if (strequal(attr, "filter_fir_config")) {
+			return sprintf(buf, "FIR Rx: %d,%d Tx: %d,%d",
+						ad9361_phy->rx_fir_ntaps, ad9361_phy->rx_fir_dec,
+						ad9361_phy->tx_fir_ntaps, ad9361_phy->tx_fir_int);
+		}
+		return -ENOENT;
 	}
-	return -ENOENT;
+	else if(strequal(device, "cf-ad9361-dds-core-lpc")) {
+
+	}
+	else if(strequal(device, "cf-ad9361-lpc")) {
+
+	}
+	return -ENODEV;
 }
 
 /***********************************************************************************************************************
@@ -280,98 +296,113 @@ static ssize_t write_attr(const char *device, const char *attr,
 {
 	u32 val = 0;
 	int arg = -1, ret = 0;
-	if(strequal(attr, "trx_rate_governor")) {
-		if(strequal(buf, "nominal")) {
-			ad9361_set_trx_rate_gov (ad9361_phy, 1);
-		}
-		else if(strequal(buf, "highest_osr")) {
-			ad9361_set_trx_rate_gov (ad9361_phy, 0);
-		}
-		else
-			ret =  -ENOENT;
-		return ret;
-	}
-	if(strequal(attr, "dcxo_tune_coarse")) {
-		uint32_t dcxo_coarse = read_ul_value(buf);
-		dcxo_coarse = clamp_t(uint32_t, dcxo_coarse, 0, 63U);
-		ad9361_phy->pdata->dcxo_coarse = dcxo_coarse;
-		ret = ad9361_set_dcxo_tune(ad9361_phy, ad9361_phy->pdata->dcxo_coarse,
-				ad9361_phy->pdata->dcxo_fine);
-		return ret;
-	}
-	if(strequal(attr, "dcxo_tune_fine")) {
-		uint32_t dcxo_fine = read_ul_value(buf);
-		dcxo_fine = clamp_t(uint32_t, dcxo_fine, 0, 8191U);
-		ad9361_phy->pdata->dcxo_fine = dcxo_fine;
-		ret = ad9361_set_dcxo_tune(ad9361_phy, ad9361_phy->pdata->dcxo_coarse,
-				ad9361_phy->pdata->dcxo_fine);
-		return ret;
-	}
-	if (strequal(attr, "calib_mode")) {
-		val = 0;
-		if (strequal(buf, "auto")) {
-			ad9361_set_tx_auto_cal_en_dis (ad9361_phy, 1);
-		} else if (strequal(buf, "manual")) {
-			ad9361_set_tx_auto_cal_en_dis (ad9361_phy, 0);
-		}
-		else if (!strncmp(buf, "tx_quad", 7)) {
-			ret = sscanf(buf, "tx_quad %d", &arg);
-			if (ret != 1)
-				arg = -1;
-			val = TX_QUAD_CAL;
-		} else if (strequal(buf, "rf_dc_offs"))
-			val = RFDC_CAL;
-		else if (strequal(buf, "rssi_gain_step"))
-			ret = ad9361_rssi_gain_step_calib(ad9361_phy);
-		else
-			return -ENOENT;
 
-		if (val)
-			ret = ad9361_do_calib(ad9361_phy, val, arg);
-
-		return ret ? ret : len;
-	}
-	if (strequal(attr, "ensm_mode")) {
-		bool res = false;
-		ad9361_phy->pdata->fdd_independent_mode = false;
-
-		if (strequal(buf, "tx"))
-			val = ENSM_STATE_TX;
-		else if (strequal(buf, "rx"))
-			val = ENSM_STATE_RX;
-		else if (strequal(buf, "alert"))
-			val = ENSM_STATE_ALERT;
-		else if (strequal(buf, "fdd"))
-			val = ENSM_STATE_FDD;
-		else if (strequal(buf, "wait"))
-			val = ENSM_STATE_SLEEP_WAIT;
-		else if (strequal(buf, "sleep"))
-			val = ENSM_STATE_SLEEP;
-		else if (strequal(buf, "pinctrl")) {
-			res = true;
-			val = ENSM_STATE_SLEEP_WAIT;
-		} else if (strequal(buf, "pinctrl_fdd_indep")) {
-			val = ENSM_STATE_FDD;
-			ad9361_phy->pdata->fdd_independent_mode = true;
-		} else
-			return -ENOENT;
-
-		ad9361_set_ensm_mode(ad9361_phy, ad9361_phy->pdata->fdd, res);
-		ret = ad9361_ensm_set_state(ad9361_phy, val, res);
-		return ret;
-	}
-	if(strequal(attr, "multichip_sync")) {
-		uint32_t readin = read_ul_value(buf);
-		if (ret < 0)
+	if (!dev_is_ad9361_module(device))
+		return -ENODEV;
+	if(strequal(device, "ad9361-phy")) {
+		if(strequal(attr, "trx_rate_governor")) {
+			if(strequal(buf, "nominal")) {
+				ad9361_set_trx_rate_gov (ad9361_phy, 1);
+			}
+			else if(strequal(buf, "highest_osr")) {
+				ad9361_set_trx_rate_gov (ad9361_phy, 0);
+			}
+			else
+				ret =  -ENOENT;
 			return ret;
-		ret = ad9361_mcs(ad9361_phy, readin);
-		return ret;
-	}
-	if(strequal(attr, "rssi_gain_step_error")) {
-		//todo
+		}
+		if(strequal(attr, "dcxo_tune_coarse")) {
+			uint32_t dcxo_coarse = read_ul_value(buf);
+			dcxo_coarse = clamp_t(uint32_t, dcxo_coarse, 0, 63U);
+			ad9361_phy->pdata->dcxo_coarse = dcxo_coarse;
+			ret = ad9361_set_dcxo_tune(ad9361_phy, ad9361_phy->pdata->dcxo_coarse,
+					ad9361_phy->pdata->dcxo_fine);
+			return ret;
+		}
+		if(strequal(attr, "dcxo_tune_fine")) {
+			uint32_t dcxo_fine = read_ul_value(buf);
+			dcxo_fine = clamp_t(uint32_t, dcxo_fine, 0, 8191U);
+			ad9361_phy->pdata->dcxo_fine = dcxo_fine;
+			ret = ad9361_set_dcxo_tune(ad9361_phy, ad9361_phy->pdata->dcxo_coarse,
+					ad9361_phy->pdata->dcxo_fine);
+			return ret;
+		}
+		if (strequal(attr, "calib_mode")) {
+			val = 0;
+			if (strequal(buf, "auto")) {
+				ad9361_set_tx_auto_cal_en_dis (ad9361_phy, 1);
+			} else if (strequal(buf, "manual")) {
+				ad9361_set_tx_auto_cal_en_dis (ad9361_phy, 0);
+			}
+			else if (!strncmp(buf, "tx_quad", 7)) {
+				ret = sscanf(buf, "tx_quad %d", &arg);
+				if (ret != 1)
+					arg = -1;
+				val = TX_QUAD_CAL;
+			} else if (strequal(buf, "rf_dc_offs"))
+				val = RFDC_CAL;
+			else if (strequal(buf, "rssi_gain_step"))
+				ret = ad9361_rssi_gain_step_calib(ad9361_phy);
+			else
+				return -ENOENT;
+
+			if (val)
+				ret = ad9361_do_calib(ad9361_phy, val, arg);
+
+			return ret ? ret : len;
+		}
+		if (strequal(attr, "ensm_mode")) {
+			bool res = false;
+			ad9361_phy->pdata->fdd_independent_mode = false;
+
+			if (strequal(buf, "tx"))
+				val = ENSM_STATE_TX;
+			else if (strequal(buf, "rx"))
+				val = ENSM_STATE_RX;
+			else if (strequal(buf, "alert"))
+				val = ENSM_STATE_ALERT;
+			else if (strequal(buf, "fdd"))
+				val = ENSM_STATE_FDD;
+			else if (strequal(buf, "wait"))
+				val = ENSM_STATE_SLEEP_WAIT;
+			else if (strequal(buf, "sleep"))
+				val = ENSM_STATE_SLEEP;
+			else if (strequal(buf, "pinctrl")) {
+				res = true;
+				val = ENSM_STATE_SLEEP_WAIT;
+			} else if (strequal(buf, "pinctrl_fdd_indep")) {
+				val = ENSM_STATE_FDD;
+				ad9361_phy->pdata->fdd_independent_mode = true;
+			} else
+				return -ENOENT;
+
+			ad9361_set_ensm_mode(ad9361_phy, ad9361_phy->pdata->fdd, res);
+			ret = ad9361_ensm_set_state(ad9361_phy, val, res);
+			return ret;
+		}
+		if(strequal(attr, "multichip_sync")) {
+			uint32_t readin = read_ul_value(buf);
+			if (ret < 0)
+				return ret;
+			ret = ad9361_mcs(ad9361_phy, readin);
+			return ret;
+		}
+		if(strequal(attr, "rssi_gain_step_error")) {
+			//todo
+			return -ENOENT;
+		}
+		if(strequal(attr, "filter_fir_config")) {
+			return ad9361_parse_fir(ad9361_phy, buf, len);
+		}
 		return -ENOENT;
 	}
-	return -ENOENT;
+	else if(strequal(device, "cf-ad9361-dds-core-lpc")) {
+
+	}
+	else if(strequal(device, "cf-ad9361-lpc")) {
+
+	}
+	return -ENODEV;
 }
 
 /***********************************************************************************************************************
@@ -384,37 +415,36 @@ static ssize_t ch_read_attr(const char *device, const char *channel,
 		bool ch_out, const char *attr, char *buf, size_t len)
 {
 	int32_t temp;
-
 	if (!dev_is_ad9361_module(device))
-				return -ENODEV;
-
-	if (strequal(attr, "Sensor")) {
-				ad9361_get_temperature(ad9361_phy, &temp);
-				return (ssize_t) snprintf(buf, len, "%d", (int)temp);
+					return -ENODEV;
+	if(strequal(device, "ad9361-phy")) {
+		if(strequal(channel, "voltage0")) {
+//			if (strequal(attr, "sampling_frequency_available")) {
+//				return (ssize_t) snprintf(buf, len, "%d", 2);
+//			}
+			if (strequal(attr, "sampling_frequency")) {
+				uint32_t sampling_freq_hz;
+				ad9361_get_rx_sampling_freq (ad9361_phy, &sampling_freq_hz);
+				return (ssize_t) snprintf(buf, len, "%d", (int)sampling_freq_hz);
 			}
-	if (strequal(attr, "voltage0")) {
-		return (ssize_t) snprintf(buf, len, "%d", 2);
+			if (strequal(attr, "filter_fir_en")) {
+				uint8_t en_dis;
+				ad9361_get_rx_fir_en_dis (ad9361_phy, &en_dis);
+				return (ssize_t) snprintf(buf, len, "%d", en_dis);
+			}
+		}
+		if(strequal(channel, "temp0")) {
+			if(strequal(attr, "input")) {
+				ad9361_get_temperature(ad9361_phy, &temp);
+					return (ssize_t) snprintf(buf, len, "%d", (int)temp);
+			}
+		}
 	}
-	if (strequal(attr, "calibscale")) {
-			return (ssize_t) snprintf(buf, len, "%d", 66);
-	}
-	if (strequal(attr, "calibphase")) {
-			return (ssize_t) snprintf(buf, len, "%d", 2);
-	}
+	else if(strequal(device, "cf-ad9361-dds-core-lpc")) {
 
-	if (strequal(attr, "sampling_frequency")) {
-		uint32_t sampling_freq_hz;
-		ad9361_get_rx_sampling_freq (ad9361_phy, &sampling_freq_hz);
-			return (ssize_t) snprintf(buf, len, "%d", (int)sampling_freq_hz);
 	}
-	if (strequal(attr, "filter_fir_en")) {
-		uint8_t en_dis;
-		ad9361_get_rx_fir_en_dis (ad9361_phy, &en_dis);
-		return (ssize_t) snprintf(buf, len, "%d", en_dis);
-	}
+	else if(strequal(device, "cf-ad9361-lpc")) {
 
-	if (strequal(attr, "sampling_frequency_available")) {
-			return (ssize_t) snprintf(buf, len, "%d", 2);
 	}
 	return -ENOENT;
 }
@@ -545,7 +575,7 @@ static ssize_t read_dev(const char *device, char *buf, size_t bytes_count)
 ***********************************************************************************************************************/
 const struct tinyiiod_ops ops = {
 	//communication
-	.read = read_data,
+	.read_line = read_line,
 	.read_nonbloking = read_nonbloking,
 	.read_wait = read_wait,
 	.write = write_data,

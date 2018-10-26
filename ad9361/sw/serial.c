@@ -130,7 +130,7 @@ int TotalErrorCount;
 static char buffer[BUFFERL_LENGTH];
 static char *pnext = buffer;
 static char *pcurr = buffer;
-int serial_read_line(char *buf, size_t len)
+int serial_read_line(char *buf)
 {
 	if(pcurr == buffer) // trigger a new receive
 	{
