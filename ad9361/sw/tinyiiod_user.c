@@ -264,9 +264,14 @@ static ssize_t read_attr(const char *device, const char *attr,
 			return (ssize_t) snprintf(buf, len, "%s", en_dis ? "auto" : "manual");
 		}
 		if (strequal(attr, "xo_correction_available")) {
-			//todo
-			//clk[0] = clk_get_rate(ad9361_phy, ad9361_phy->ref_clk_scale[BB_REFCLK]);
 
+//			clk[0] = clk_get_rate(ad9361_phy, ad9361_phy->ref_clk_scale[BB_REFCLK]);
+//			clk_get_accuracy(ad9361_phy, ad9361_phy->ref_clk_scale[BB_REFCLK]);
+		}
+		if (strequal(attr, "xo_correction")) {
+//			clk_get_rate(ad9361_phy, ad9361_phy->ref_clk_scale[RX_REFCLK]);
+//			ad9361_phy->ref_clk_scale
+//			ad9361_phy->current_rx_lo_freq
 		}
 		if (strequal(attr, "ensm_mode_available")) {
 
@@ -435,8 +440,29 @@ static ssize_t ch_read_attr(const char *device, const char *channel,
 		return -ENODEV;
 	uint32_t ch_num = strequal(channel, "voltage0") ? 0 : 1;
 	if(strequal(device, "ad9361-phy")) {
+
 		if (strequal(attr, "sampling_frequency_available")) {
-			return (ssize_t) snprintf(buf, len, "%d", 2);
+			int int_dec;
+			uint32_t max;
+
+			if (ad9361_phy->pdata->port_ctrl.pp_conf[2] & LVDS_MODE)
+				max = 61440000U;
+			else
+				max = 61440000U / (ad9361_phy->pdata->rx2tx2 ? 2 : 1);
+
+			if (ch_out) {
+				if (ad9361_phy->bypass_tx_fir)
+					int_dec = 1;
+				else
+					int_dec = ad9361_phy->tx_fir_int;
+
+			} else {
+				if (ad9361_phy->bypass_rx_fir)
+					int_dec = 1;
+				else
+					int_dec = ad9361_phy->rx_fir_dec;
+			}
+			return (ssize_t) snprintf(buf, len, "[%lu %d %lu]", MIN_ADC_CLK / (12 * int_dec), 1, max);
 		}
 		if (strequal(attr, "sampling_frequency")) {
 			uint32_t sampling_freq_hz;
@@ -445,13 +471,41 @@ static ssize_t ch_read_attr(const char *device, const char *channel,
 		}
 		if (strequal(attr, "filter_fir_en")) {
 			uint8_t en_dis;
-			ad9361_get_rx_fir_en_dis (ad9361_phy, &en_dis);
+			if(ch_out) {
+				ad9361_get_tx_fir_en_dis (ad9361_phy, &en_dis);
+			}
+			else {
+				ad9361_get_rx_fir_en_dis (ad9361_phy, &en_dis);
+			}
 			return (ssize_t) snprintf(buf, len, "%d", en_dis);
 		}
+		if (strequal(attr, "bb_dc_offset_tracking_en")) {
+			if(!ch_out) {
+				return (ssize_t) sprintf(buf, "%d", ad9361_phy->bbdc_track_en);
+			}
+			return -ENOENT;
+		}
+		if (strequal(attr, "rf_dc_offset_tracking_en")) {
+			if(!ch_out) {
+				return (ssize_t) sprintf(buf, "%d", ad9361_phy->rfdc_track_en);
+			}
+			return -ENOENT;
+		}
+		if (strequal(attr, "quadrature_tracking_en")) {
+			if(!ch_out) {
+				return (ssize_t) sprintf(buf, "%d", ad9361_phy->quad_track_en);
+			}
+			return -ENOENT;
+		}
+
+
 		if (strequal(attr, "rssi")) {
 			if(ch_out) {
 				uint32_t rssi_db_x_1000;
-				ad9361_get_tx_rssi(ad9361_phy, ch_num, &rssi_db_x_1000);
+				ret = ad9361_get_tx_rssi(ad9361_phy, ch_num, &rssi_db_x_1000);
+				if (ret < 0) {
+					return -EINVAL;
+				}
 				return ret < 0 ? ret : sprintf(buf, "%lu.%02lu dB",
 						rssi_db_x_1000 / 1000, rssi_db_x_1000 % 1000);
 			}
@@ -595,10 +649,54 @@ static ssize_t ch_write_attr(const char *device, const char *channel,
 			return len;
 	}
 	if (strequal(attr, "filter_fir_en")) {
-		uint8_t en_dis = read_ul_value(buf);
-		ad9361_set_rx_fir_en_dis (ad9361_phy, en_dis);
+		int8_t en_dis = read_value(buf);
+		if(en_dis < 0) {
+			return en_dis;
+		}
+		en_dis = en_dis ? 1 : 0;
+		if(ch_out) {
+			ad9361_set_tx_fir_en_dis (ad9361_phy, en_dis);
+		}
+		else {
+			ad9361_set_rx_fir_en_dis (ad9361_phy, en_dis);
+		}
+
 		return len;
 	}
+	if (strequal(attr, "bb_dc_offset_tracking_en")) {
+		int8_t en_dis = read_value(buf);
+		if(en_dis < 0) {
+			return en_dis;
+		}
+		ad9361_phy->bbdc_track_en = en_dis ? 1 : 0;
+		if(!ch_out) {
+			return ad9361_tracking_control(ad9361_phy, ad9361_phy->bbdc_track_en, ad9361_phy->rfdc_track_en, ad9361_phy->quad_track_en);
+		}
+		return -ENOENT;
+	}
+	if (strequal(attr, "quadrature_tracking_en")) {
+		int8_t en_dis = read_value(buf);
+		if(en_dis < 0) {
+			return en_dis;
+		}
+		ad9361_phy->quad_track_en = en_dis ? 1 : 0;
+		if(!ch_out) {
+			return ad9361_tracking_control(ad9361_phy, ad9361_phy->bbdc_track_en, ad9361_phy->rfdc_track_en, ad9361_phy->quad_track_en);
+		}
+		return -ENOENT;
+	}
+	if (strequal(attr, "rf_dc_offset_tracking_en")) {
+		int8_t en_dis = read_value(buf);
+		if(en_dis < 0) {
+			return en_dis;
+		}
+		ad9361_phy->rfdc_track_en = en_dis ? 1 : 0;
+		if(!ch_out) {
+			return ad9361_tracking_control(ad9361_phy, ad9361_phy->bbdc_track_en, ad9361_phy->rfdc_track_en, ad9361_phy->quad_track_en);
+		}
+		return -ENOENT;
+	}
+
 	if (strequal(attr, "rf_port_select")) {
 		uint32_t i = 0;
 		if(ch_out) {
